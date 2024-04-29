@@ -9,6 +9,61 @@
 #include <iostream>
 #include <vector>
 
+// void quadratic_regression(double &a, double &b, double &c,
+//                           const std::vector<double> &x,
+//                           const std::vector<double> &y) {
+//   // Number of data points
+//   int n = x.size();
+
+//   // Number of coefficients in the polynomial
+//   int m = 3;
+
+//   // Set up the matrix A with dimensions nxm
+//   double A[n * m];
+//   for (int i = 0; i < n; ++i) {
+//     A[i + n * 0] = x[i] * x[i]; // x^2
+//     A[i + n * 1] = x[i];        // x
+//     A[i + n * 2] = 1;           // 1
+//   }
+
+//   // Set up the vector b
+//   double B[n];
+//   for (int i = 0; i < n; ++i) {
+//     B[i] = y[i];
+//   }
+
+//   // Solve the least squares problem using LAPACK
+//   int lda = n;
+//   int ldb = n;
+//   int nrhs = 1;
+//   int info;
+//   int lwork = -1;
+//   double wkopt;
+//   double minus_one = -1.0;
+//   // Query and allocate the optimal workspace
+//   dgelss_(&n, &m, &nrhs, A, &lda, B, &ldb, nullptr, &minus_one, &wkopt,
+//   &lwork,
+//           &info);
+//   lwork = (int)wkopt;
+//   double work[lwork];
+
+//   // Solve the equation A*X = B
+//   double singular_values[m];
+//   dgelss_(&n, &m, &nrhs, A, &lda, B, &ldb, singular_values, &minus_one, work,
+//           &lwork, &info);
+
+//   // Check for successful completion
+//   if (info > 0) {
+//     std::cerr << "The algorithm computing SVD failed to converge." <<
+//     std::endl; exit(1);
+//   }
+
+//   // Output the coefficients
+//   a = B[0];
+//   b = B[1];
+//   c = B[2];
+// }
+
 void quadratic_regression(double &a, double &b, double &c,
                           const std::vector<double> &x,
                           const std::vector<double> &y) {
@@ -16,9 +71,9 @@ void quadratic_regression(double &a, double &b, double &c,
 
   std::vector<double> A(n * 3);
   for (int i = 0; i < n; ++i) {
-    A[i * 3] = 1.0;
-    A[i * 3 + 1] = x[i];
-    A[i * 3 + 2] = x[i] * x[i];
+    A[i] = 1.0;
+    A[i + n] = x[i];
+    A[i + 2 * n] = x[i] * x[i];
   }
 
   int lda = n;
@@ -30,23 +85,22 @@ void quadratic_regression(double &a, double &b, double &c,
   double minus_one = -1.0;
   std::vector<double> S(3); // At most 3 singular values
   std::vector<double> Y(y);
-
   // Workspace query
   double wkopt;
+  int iwkopt;
   int lwork = -1;
-  std::vector<int> iwork(3 * n);
-
+  int liwork = -1;
   // Query optimal workspace
   dgelsd_(&n, &m, &nrhs, A.data(), &lda, Y.data(), &ldb, S.data(), &minus_one,
-          &rank, &wkopt, &lwork, iwork.data(), &info);
+          &rank, &wkopt, &lwork, &iwkopt, &info);
 
   lwork = (int)wkopt;
+  liwork = iwkopt;
   std::vector<double> work(lwork);
-
+  std::vector<int> iwork(liwork);
   // Compute the solution
   dgelsd_(&n, &m, &nrhs, A.data(), &lda, Y.data(), &ldb, S.data(), &minus_one,
           &rank, work.data(), &lwork, iwork.data(), &info);
-
   if (info != 0) {
     std::cerr << "The algorithm computing SVD failed to converge, info: "
               << info << std::endl;
@@ -70,6 +124,10 @@ double ls_american_put_option_backward_pass(std::vector<std::vector<double>> &X,
   int paths = X[0].size();
 
   std::vector<double> cashflow = std::move(X[length - 1]);
+  for (int i = 0; i < paths; i++) {
+    cashflow[i] = std::max(strike - cashflow[i], 0.0);
+  }
+
   for (int i = length - 2; i > 0; i--) {
     // compute discount factor
     double dt = t[i + 1] - t[i];
@@ -91,7 +149,7 @@ double ls_american_put_option_backward_pass(std::vector<std::vector<double>> &X,
         count++;
       }
     }
-
+    // prune the paths that are not in the money
     // note, i think there are very fast CUDA kernel implementations for this
     std::vector<double> x_itm(count);
     std::vector<double> cashflow_itm(count);
@@ -106,10 +164,10 @@ double ls_american_put_option_backward_pass(std::vector<std::vector<double>> &X,
 
     double a, b, c;
     quadratic_regression(a, b, c, x_itm, cashflow_itm);
-
     std::vector<double> continuation(paths);
+
     for (int j = 0; j < paths; j++) {
-      continuation[j] = eval_quadratic(a, b, c, x[j]);
+      continuation[j] = eval_quadratic(c, b, a, x[j]);
     }
 
     std::vector<bool> ex_idx(paths);
@@ -123,11 +181,12 @@ double ls_american_put_option_backward_pass(std::vector<std::vector<double>> &X,
       }
     }
   }
+
   // discount the final timestep
   double dt = t[1] - t[0];
   double discount = exp(-r * dt);
   cblas_dscal(paths, discount, cashflow.data(), 1);
-  // return mean of cashflows
+  // return mean of cashflows at t0
   double sum = 0.0;
   for (int i = 0; i < paths; i++) {
     sum += cashflow[i];
