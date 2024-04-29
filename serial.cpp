@@ -4,65 +4,8 @@
 #include <lapacke.h>
 
 #include <cmath>
-
-#include "lapacke.h" // Make sure LAPACK is properly linked
 #include <iostream>
 #include <vector>
-
-// void quadratic_regression(double &a, double &b, double &c,
-//                           const std::vector<double> &x,
-//                           const std::vector<double> &y) {
-//   // Number of data points
-//   int n = x.size();
-
-//   // Number of coefficients in the polynomial
-//   int m = 3;
-
-//   // Set up the matrix A with dimensions nxm
-//   double A[n * m];
-//   for (int i = 0; i < n; ++i) {
-//     A[i + n * 0] = x[i] * x[i]; // x^2
-//     A[i + n * 1] = x[i];        // x
-//     A[i + n * 2] = 1;           // 1
-//   }
-
-//   // Set up the vector b
-//   double B[n];
-//   for (int i = 0; i < n; ++i) {
-//     B[i] = y[i];
-//   }
-
-//   // Solve the least squares problem using LAPACK
-//   int lda = n;
-//   int ldb = n;
-//   int nrhs = 1;
-//   int info;
-//   int lwork = -1;
-//   double wkopt;
-//   double minus_one = -1.0;
-//   // Query and allocate the optimal workspace
-//   dgelss_(&n, &m, &nrhs, A, &lda, B, &ldb, nullptr, &minus_one, &wkopt,
-//   &lwork,
-//           &info);
-//   lwork = (int)wkopt;
-//   double work[lwork];
-
-//   // Solve the equation A*X = B
-//   double singular_values[m];
-//   dgelss_(&n, &m, &nrhs, A, &lda, B, &ldb, singular_values, &minus_one, work,
-//           &lwork, &info);
-
-//   // Check for successful completion
-//   if (info > 0) {
-//     std::cerr << "The algorithm computing SVD failed to converge." <<
-//     std::endl; exit(1);
-//   }
-
-//   // Output the coefficients
-//   a = B[0];
-//   b = B[1];
-//   c = B[2];
-// }
 
 void quadratic_regression(double &a, double &b, double &c,
                           const std::vector<double> &x,
