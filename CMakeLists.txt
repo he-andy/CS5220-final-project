@@ -1,8 +1,10 @@
 cmake_minimum_required(VERSION 3.11)
-project(hw3)
+project(final_project)
 enable_language(CUDA)
 set(CMAKE_CXX_STANDARD 11)
 set(CMAKE_CXX_STANDARD_REQUIRED YES)
+
+find_package(BLAS REQUIRED)
 
 # netID
 set(NET_ID xxx CACHE STRING "Your netID")
@@ -28,9 +30,13 @@ endif ()
 add_executable(gpu main.cpp gpu.cu common.h)
 target_compile_features(gpu PRIVATE cxx_std_11)
 set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -arch=sm_60")
+target_compile_options(gpu PRIVATE -Wall -pedantic)
 
 add_executable(omp main.cpp omp.cpp common.h)
 target_compile_features(omp PRIVATE cxx_std_11)
+target_compile_options(omp PRIVATE -Wall -pedantic)
 
-# Copy the job scripts
-configure_file(job-gpu job-gpu COPYONLY)
+add_executable(serial main.cpp serial.cpp common.h)
+target_compile_features(serial PRIVATE cxx_std_11)
+target_link_libraries(PRIVATE ${BLAS_LIBRARIES})
+target_compile_options(serial PRIVATE -Wall -pedantic)
