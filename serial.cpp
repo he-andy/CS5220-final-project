@@ -22,10 +22,12 @@ void quadratic_regression(double &a, double &b, double &c,
   }
 
   int lda = n;
+  int m = 3;
   int nrhs = 1;
   int ldb = n;
   int info;
   int rank;
+  double minus_one = -1.0;
   std::vector<double> S(3); // At most 3 singular values
   std::vector<double> Y(y);
 
@@ -35,15 +37,15 @@ void quadratic_regression(double &a, double &b, double &c,
   std::vector<int> iwork(3 * n);
 
   // Query optimal workspace
-  dgelsd_(n, 3, &nrhs, A.data(), lda, Y.data(), ldb, S.data(), -1.0, &rank,
-          &wkopt, &lwork, iwork.data(), &info);
+  dgelsd_(&n, &m, &nrhs, A.data(), &lda, Y.data(), &ldb, S.data(), &minus_one,
+          &rank, &wkopt, &lwork, iwork.data(), &info);
 
   lwork = (int)wkopt;
   std::vector<double> work(lwork);
 
   // Compute the solution
-  dgelsd_(n, 3, nrhs, A.data(), lda, Y.data(), ldb, S.data(), -1.0, &rank,
-          work.data(), &lwork, iwork.data(), &info);
+  dgelsd_(&n, &m, nrhs, A.data(), &lda, Y.data(), &ldb, S.data(), &minus_one,
+          &rank, work.data(), &lwork, iwork.data(), &info);
 
   if (info != 0) {
     std::cerr << "The algorithm computing SVD failed to converge, info: "
@@ -73,7 +75,7 @@ double ls_american_put_option_backward_pass(std::vector<std::vector<double>> &X,
     double dt = t[i + 1] - t[i];
     double discount = exp(-r * dt);
     // discount cashflow for this timestep
-    cashflow = cblas_dscal(paths, discount, cashflow.data(), 1);
+    cblas_dscal(paths, discount, cashflow.data(), 1);
     std::vector<double> x = std::move(X[i]);
     // exercise values for this timestep
     std::vector<double> exercise_value(paths);
@@ -124,7 +126,7 @@ double ls_american_put_option_backward_pass(std::vector<std::vector<double>> &X,
   // discount the final timestep
   double dt = t[1] - t[0];
   double discount = exp(-r * dt);
-  cashflow = cblas_dscal(paths, discount, cashflow.data(), 1);
+  cblas_dscal(paths, discount, cashflow.data(), 1);
   // return mean of cashflows
   double sum = 0.0;
   for (int i = 0; i < paths; i++) {

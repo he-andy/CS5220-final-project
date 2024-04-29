@@ -38,5 +38,5 @@ target_compile_options(omp PRIVATE -Wall -pedantic)
 
 add_executable(serial main.cpp serial.cpp common.h)
 target_compile_features(serial PRIVATE cxx_std_11)
-target_link_libraries(PRIVATE ${BLAS_LIBRARIES})
+target_link_libraries(serial ${BLAS_LIBRARIES})
 target_compile_options(serial PRIVATE -Wall -pedantic)
