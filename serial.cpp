@@ -57,7 +57,8 @@ void quadratic_regression(double &a, double &b, double &c,
 }
 
 double eval_quadratic(double a, double b, double c, double x) {
-  return a * x * x + b * x + c;
+  // return a * x * x + b * x + c;
+  return c + x * (b + a * x);
 }
 
 double ls_american_put_option_backward_pass(std::vector<std::vector<double>> &X,
