@@ -16,10 +16,10 @@ void simple_test() {
 
   // Benchmark the function
   auto start_time = std::chrono::high_resolution_clock::now();
-  ls_american_put_option_backward_pass(X, t, r, strike);
+  double price = ls_american_put_option_backward_pass(X, t, r, strike);
   auto end_time = std::chrono::high_resolution_clock::now();
   std::chrono::duration<double> duration = end_time - start_time;
-
+  std::cout << "Price: " << price << std::endl;
   std::cout << "Execution time: " << duration.count() << " seconds"
             << std::endl;
 }
