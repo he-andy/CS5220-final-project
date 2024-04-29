@@ -44,7 +44,7 @@ void quadratic_regression(double &a, double &b, double &c,
   std::vector<double> work(lwork);
 
   // Compute the solution
-  dgelsd_(&n, &m, nrhs, A.data(), &lda, Y.data(), &ldb, S.data(), &minus_one,
+  dgelsd_(&n, &m, &nrhs, A.data(), &lda, Y.data(), &ldb, S.data(), &minus_one,
           &rank, work.data(), &lwork, iwork.data(), &info);
 
   if (info != 0) {
