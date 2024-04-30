@@ -3,6 +3,8 @@
 #ifndef __CS267_COMMON_H__
 #define __CS267_COMMON_H__
 
+// constants
+#define save_freq 1000
 // Backward pass
 double ls_american_put_option_backward_pass(std::vector<std::vector<double>> &X,
                                             double dt, double r, double strike);
