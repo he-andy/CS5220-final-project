@@ -5,8 +5,7 @@
 
 // Backward pass
 double ls_american_put_option_backward_pass(std::vector<std::vector<double>> &X,
-                                            std::vector<double> &t, double r,
-                                            double strike);
+                                            double dt, double r, double strike);
 // void simulate()
 template <typename T> void printVector(const std::vector<T> &vec) {
   std::cout << "[";
