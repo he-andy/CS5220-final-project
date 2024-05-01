@@ -12,10 +12,11 @@ void simple_test() {
       {1.34, 1.54, 1.03, 0.92, 1.52, 0.90, 1.01, 1.34}};
   double r = 0.06; // Risk-free rate
   double strike = 1.1;
+  std::vector<int> stop;
 
   // Benchmark the function
   auto start_time = std::chrono::high_resolution_clock::now();
-  double price = ls_american_put_option_backward_pass(X, 1.0, r, strike);
+  double price = ls_american_put_option_backward_pass(X, stop, 1.0, r, strike);
   auto end_time = std::chrono::high_resolution_clock::now();
   std::chrono::duration<double> duration = end_time - start_time;
   std::cout << "Price: " << price << std::endl;
@@ -26,10 +27,10 @@ void simple_test() {
 void test(int paths, int steps, double s0, double dt, double strike, double r,
           double drift, double vol) {
   auto X = generate_random_paths(paths, steps, s0, dt, drift, vol);
-
+  std::vector<int> stop;
   // Benchmark the function
   auto start_time = std::chrono::high_resolution_clock::now();
-  double price = ls_american_put_option_backward_pass(X, dt, r, strike);
+  double price = ls_american_put_option_backward_pass(X, stop, dt, r, strike);
   auto end_time = std::chrono::high_resolution_clock::now();
   std::chrono::duration<double> duration = end_time - start_time;
   std::cout << "Price: " << price << std::endl;
