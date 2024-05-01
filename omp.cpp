@@ -173,14 +173,15 @@ generate_random_paths(int n_paths, int n_time_steps, double initial_price,
       n_time_steps, std::vector<double>(n_paths, initial_price));
   std::vector<std::mt19937> generators;
   std::vector<std::normal_distribution<double>> distributions;
+  int n_threads = omp_get_num_threads();
 
-  generators.resize(n_paths);
-  distributions.resize(n_paths);
+  generators.resize(n_threads);
+  distributions.resize(n_threads);
 #pragma omp parallel for
-  for (int p = 0; p < n_paths; p++)
+  for (int tid = 0; tid < n_threads; tid++)
   {
-    generators[p] = std::mt19937{std::random_device{}()};
-    distributions[p] = std::normal_distribution<double>(0.0, 1.0);
+    generators[tid] = std::mt19937{std::random_device{}()};
+    distributions[tid] = std::normal_distribution<double>(0.0, 1.0);
   }
 
   for (int t = 1; t < n_time_steps; ++t)
@@ -188,7 +189,8 @@ generate_random_paths(int n_paths, int n_time_steps, double initial_price,
 #pragma omp parallel for
     for (int p = 0; p < n_paths; p++)
     {
-      const double sample = distributions[p](generators[p]);
+      const int tid = omp_get_thread_num();
+      const double sample = distributions[tid](generators[tid]);
       const double increment = std::sqrt(delta_t) * sample;
       matrix[t][p] =
           matrix[t - 1][p] + drift * delta_t + volatility * increment;
