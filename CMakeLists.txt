@@ -36,7 +36,8 @@ endif ()
 add_executable(omp main.cpp omp.cpp common.h)
 target_compile_features(omp PRIVATE cxx_std_11)
 target_link_libraries(omp PRIVATE OpenMP::OpenMP_CXX)
-target_compile_options(omp PRIVATE -Wall -pedantic)
+target_compile_options(omp PRIVATE -Wall -pedantic -fopenmp)
+
 
 add_executable(serial main.cpp serial.cpp common.h)
 target_compile_features(serial PRIVATE cxx_std_11)

@@ -16,6 +16,7 @@ void quadratic_regression(double &a, double &b, double &c,
 {
   int n = x.size();
   std::vector<double> A(n * 3);
+  #pragma omp parallel for
   for (int i = 0; i < n; ++i)
   {
     A[i] = 1.0;
@@ -92,6 +93,7 @@ double ls_american_put_option_backward_pass(std::vector<std::vector<double>> &X,
     std::vector<double> x = std::move(X[i]);
     // exercise values for this timestep
     std::vector<double> exercise_value(paths);
+    #pragma omp parallel for
     for (int j = 0; j < paths; j++)
     {
       exercise_value[j] = std::max(strike - x[j], 0.0);
@@ -99,11 +101,13 @@ double ls_american_put_option_backward_pass(std::vector<std::vector<double>> &X,
 
     std::vector<bool> itm(paths);
     int count = 0;
+    #pragma omp parallel for
     for (int j = 0; j < paths; j++)
     {
       itm[j] = exercise_value[j] > 0;
       if (itm[j])
       {
+        #pragma omp atomic update
         count++;
       }
     }
@@ -112,12 +116,14 @@ double ls_american_put_option_backward_pass(std::vector<std::vector<double>> &X,
     std::vector<double> x_itm(count);
     std::vector<double> cashflow_itm(count);
     int k = 0;
+    #pragma omp parallel for
     for (int j = 0; j < paths; j++)
     {
       if (itm[j])
       {
         x_itm[k] = x[j];
         cashflow_itm[k] = cashflow[j];
+        #pragma omp atomic update
         k += 1;
       }
     }
@@ -129,10 +135,12 @@ double ls_american_put_option_backward_pass(std::vector<std::vector<double>> &X,
       double a, b, c;
       quadratic_regression(a, b, c, x_itm, cashflow_itm);
 
+      #pragma omp parallel for
       for (int j = 0; j < paths; j++)
       {
         continuation[j] = eval_quadratic(c, b, a, x[j]);
       }
+      #pragma omp parallel for
       for (int j = 0; j < paths; j++)
       {
         ex_idx[j] = itm[j] && (exercise_value[j] > continuation[j]);
@@ -144,6 +152,7 @@ double ls_american_put_option_backward_pass(std::vector<std::vector<double>> &X,
       std::fill(ex_idx.begin(), ex_idx.end(), false);
     }
 
+    #pragma omp parallel for
     for (int j = 0; j < paths; j++)
     {
       if (ex_idx[j])
@@ -158,6 +167,7 @@ double ls_american_put_option_backward_pass(std::vector<std::vector<double>> &X,
   cblas_dscal(paths, discount, cashflow.data(), 1);
   // return mean of cashflows at t0
   double sum = 0.0;
+  #pragma omp parallel for reduction(+:sum)
   for (int i = 0; i < paths; i++)
   {
     sum += cashflow[i];
