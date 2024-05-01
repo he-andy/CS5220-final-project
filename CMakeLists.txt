@@ -5,6 +5,7 @@ set(CMAKE_CXX_STANDARD 11)
 set(CMAKE_CXX_STANDARD_REQUIRED YES)
 
 find_package(BLAS REQUIRED)
+find_package(OpenMP REQUIRED)
 
 # netID
 set(NET_ID xxx CACHE STRING "Your netID")
@@ -32,9 +33,10 @@ endif ()
 #set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -arch=sm_60")
 #target_compile_options(gpu PRIVATE -Wall -pedantic)
 
-#add_executable(omp main.cpp omp.cpp common.h)
-#target_compile_features(omp PRIVATE cxx_std_11)
-#target_compile_options(omp PRIVATE -Wall -pedantic)
+add_executable(omp main.cpp omp.cpp common.h)
+target_compile_features(omp PRIVATE cxx_std_11)
+target_link_libraries(omp PRIVATE OpenMP::OpenMP_CXX)
+target_compile_options(omp PRIVATE -Wall -pedantic)
 
 add_executable(serial main.cpp serial.cpp common.h)
 target_compile_features(serial PRIVATE cxx_std_11)
