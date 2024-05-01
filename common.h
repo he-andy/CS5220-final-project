@@ -6,7 +6,7 @@
 // constants
 #define save_freq 1000
 // Backward pass
-double ls_american_put_option_backward_pass(std::vector<std::vector<double>> &X,
+double ls_american_put_option_backward_pass(std::vector<std::vector<double>> &X, std::vector<int> &stop,
                                             double dt, double r, double strike);
 // void simulate()
 template <typename T> void printVector(const std::vector<T> &vec) {

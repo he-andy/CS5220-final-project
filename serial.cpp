@@ -63,11 +63,12 @@ double eval_quadratic(double a, double b, double c, double x) {
   return c + x * (b + a * x);
 }
 
-double ls_american_put_option_backward_pass(std::vector<std::vector<double>> &X,
+double ls_american_put_option_backward_pass(std::vector<std::vector<double>> &X, std::vector<int> &stop,
                                             double dt, double r,
                                             double strike) {
   int length = X.size();
   int paths = X[0].size();
+  stop = std::vector<int>(paths, length - 1);
   double discount = exp(-r * dt);
 
   std::vector<double> cashflow = std::move(X[length - 1]);
@@ -128,6 +129,7 @@ double ls_american_put_option_backward_pass(std::vector<std::vector<double>> &X,
     for (int j = 0; j < paths; j++) {
       if (ex_idx[j]) {
         cashflow[j] = exercise_value[j];
+        stop[j] = i;
       }
     }
   }
