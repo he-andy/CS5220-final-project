@@ -1,7 +1,8 @@
+#include <thrust/device_vector.h>
+#include <curand_kernel.h>
 #include <vector>
 #include <chrono>
 #include <iostream>
-#include <vector>
 #include <fstream>
 
 void quadratic_regression(double &a, double &b, double &c,
@@ -10,12 +11,47 @@ void quadratic_regression(double &a, double &b, double &c,
   return;
 }
 
-std::vector<std::vector<double>>
+
+__global__ void generate_path_kernel(double *paths, int n_paths, int n_time_steps,
+                                    double initial_price, double delta_t,
+                                    double drift, double volatility) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx >= n_paths) return;
+
+    curandState state;
+    int seed = 0;
+    curand_init(seed, idx, 0, &state);
+
+    int offset = idx;
+    paths[offset] = initial_price;
+    for (int t = 1; t < n_time_steps; ++t) {
+        offset += n_paths;
+        double z = curand_normal_double(&state);
+        double increment = sqrt(delta_t) * z;
+        paths[offset] = paths[offset - n_paths] + drift * delta_t + volatility * increment;
+    }
+}
+
+thrust::device_vector<double>
 generate_random_paths(int n_paths, int n_time_steps, double initial_price,
                       double delta_t, double drift, double volatility) {
-                        return {};
-                      }
 
+    thrust::device_vector<double> d_paths(n_paths * n_time_steps);
+
+    // Kernel configuration
+    int threadsPerBlock = 256;
+    int blocksPerGrid = (n_paths + threadsPerBlock - 1) / threadsPerBlock;
+
+    // Launch the kernel
+    generate_path_kernel<<<blocksPerGrid, threadsPerBlock>>>(thrust::raw_pointer_cast(d_paths.data()),
+                                                            n_paths, n_time_steps, initial_price,
+                                                            delta_t, drift, volatility);
+
+    // Wait for GPU to finish before accessing on host
+    cudaDeviceSynchronize();
+
+    return d_paths;
+}
 
 void test(int paths, int steps, double s0, double dt, double strike, double r,
           double drift, double vol, const std::string &save_path)
