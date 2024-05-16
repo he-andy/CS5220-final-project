@@ -13,33 +13,41 @@
 #include <chrono>
 #include <iostream>
 #include <fstream>
+#include <omp.h>
 
-struct discount_functor {
+struct discount_functor
+{
     double discount;
     discount_functor(double _discount) : discount(_discount) {}
-    __device__ double operator()(const double& x) const {
+    __device__ double operator()(const double &x) const
+    {
         return x * discount;
     }
 };
 
-struct exercise_value_functor {
+struct exercise_value_functor
+{
     double strike;
     exercise_value_functor(double _strike) : strike(_strike) {}
-    __device__ double operator()(const double& x) const {
+    __device__ double operator()(const double &x) const
+    {
         return max(strike - x, 0.0);
     }
 };
 
-struct continuation_functor {
+struct continuation_functor
+{
     double a, b, c;
     continuation_functor(double _a, double _b, double _c) : a(_a), b(_b), c(_c) {}
-    __device__ double operator()(const double& x) const {
+    __device__ double operator()(const double &x) const
+    {
         return a * x * x + b * x + c;
     }
 };
 
-void quadratic_regression(double& a, double& b, double& c, thrust::device_vector<double>& x, thrust::device_vector<double>& y) {
-    // make vandermonde matrix 
+void quadratic_regression(double &a, double &b, double &c, thrust::device_vector<double> &x, thrust::device_vector<double> &y)
+{
+    // make vandermonde matrix
     int n = x.size();
     thrust::device_vector<double> A(n * 3);
     thrust::fill(A.begin(), A.begin() + n, 1.0);
@@ -48,17 +56,15 @@ void quadratic_regression(double& a, double& b, double& c, thrust::device_vector
 
     thrust::device_vector<double> sol(3);
 
-
-    double* d_A = thrust::raw_pointer_cast(A.data());
-    double* d_y = thrust::raw_pointer_cast(y.data());
-    double* d_x = thrust::raw_pointer_cast(sol.data());
-
+    double *d_A = thrust::raw_pointer_cast(A.data());
+    double *d_y = thrust::raw_pointer_cast(y.data());
+    double *d_x = thrust::raw_pointer_cast(sol.data());
 
     cusolverDnHandle_t cusolverH;
     cusolver_status = cusolverDnCreate(&cusolverH);
 
     // Query working space of geqrf and ormqr
-    void* d_work;
+    void *d_work;
     size_t work_size;
 
     cusolverDnDXgels_bufferSize(cusolverH, n, 3, 1, d_A, n, d_y, n, d_x, 3, dwork, &work_size);
@@ -66,9 +72,9 @@ void quadratic_regression(double& a, double& b, double& c, thrust::device_vector
     // Allocate working space
     cudaMalloc(&d_work, work_size);
 
-    int* devInfo;
+    int *devInfo;
     cudaMalloc(&devInfo, sizeof(int));
-    int* niter;
+    int *niter;
     cudaMalloc(&niter, sizeof(int));
 
     // Solve the least squares problem
@@ -76,7 +82,8 @@ void quadratic_regression(double& a, double& b, double& c, thrust::device_vector
 
     int h_info = 0;
     cudaMemcpy(&h_info, dev_info, sizeof(int), cudaMemcpyDeviceToHost);
-    if (h_info != 0) {
+    if (h_info != 0)
+    {
         std::cerr << "QR decomposition failed!" << std::endl;
         return;
     }
@@ -91,7 +98,8 @@ void quadratic_regression(double& a, double& b, double& c, thrust::device_vector
     cusolverDnDestroy(cusolverH);
 }
 
-double ls_american_put_option_backward_pass(thrust::device_vector<thrust::device_vector<double>>& X, thrust::device_vector<int>& stop, double dt, double r, double strike) {
+double ls_american_put_option_backward_pass(thrust::device_vector<thrust::device_vector<double>> &X, thrust::device_vector<int> &stop, double dt, double r, double strike)
+{
     int length = X.size();
     int paths = X[0].size();
     stop = thrust::device_vector<int>(paths, length - 1);
@@ -100,7 +108,8 @@ double ls_american_put_option_backward_pass(thrust::device_vector<thrust::device
     thrust::device_vector<double> cashflow = X[length - 1];
     thrust::transform(cashflow.begin(), cashflow.end(), cashflow.begin(), exercise_value_functor(strike));
 
-    for (int i = length - 2; i > 0; i--) {
+    for (int i = length - 2; i > 0; i--)
+    {
         // Discount the cashflows using thrust::transform
         thrust::transform(cashflow.begin(), cashflow.end(), cashflow.begin(), discount_functor(discount));
 
@@ -110,20 +119,20 @@ double ls_american_put_option_backward_pass(thrust::device_vector<thrust::device
 
         // find all the ITM paths
         thrust::device_vector<bool> itm(paths);
-        thrust::transform(exercise_value.begin(), exercise_value.end(), itm.begin(), [] __device__(double ev) {
-            return ev > 0;
-        });
+        thrust::transform(exercise_value.begin(), exercise_value.end(), itm.begin(), [] __device__(double ev)
+                          { return ev > 0; });
 
         int count = thrust::count(itm.begin(), itm.end(), true);
 
-        if (count > 0) {
+        if (count > 0)
+        {
             // prune the paths that are not ITM
             thrust::device_vector<double> x_itm(count);
             thrust::device_vector<double> cashflow_itm(count);
             thrust::copy_if(x.begin(), x.end(), itm.begin(), x_itm.begin(), thrust::identity<bool>());
             thrust::copy_if(cashflow.begin(), cashflow.end(), itm.begin(), cashflow_itm.begin(), thrust::identity<bool>());
 
-            //TODO: implement the quadratic regression for CUDA
+            // TODO: implement the quadratic regression for CUDA
             double a, b, c;
             quadratic_regression(a, b, c, x_itm, cashflow_itm);
 
@@ -138,29 +147,30 @@ double ls_american_put_option_backward_pass(thrust::device_vector<thrust::device
                 thrust::make_zip_iterator(thrust::make_tuple(exercise_value.begin(), continuation.begin(), itm.begin())),
                 thrust::make_zip_iterator(thrust::make_tuple(exercise_value.end(), continuation.end(), itm.end())),
                 ex_idx.begin(),
-                [] __device__(thrust::tuple<double, double, bool> t) {
-                double exercise_value = thrust::get<0>(t);
-                double continuation = thrust::get<1>(t);
-                bool itm = thrust::get<2>(t);
-                return itm && (exercise_value > continuation);
-            }
-            );
+                [] __device__(thrust::tuple<double, double, bool> t)
+                {
+                    double exercise_value = thrust::get<0>(t);
+                    double continuation = thrust::get<1>(t);
+                    bool itm = thrust::get<2>(t);
+                    return itm && (exercise_value > continuation);
+                });
 
             thrust::transform(
                 thrust::make_zip_iterator(thrust::make_tuple(cashflow.begin(), exercise_value.begin(), ex_idx.begin(), stop.begin())),
                 thrust::make_zip_iterator(thrust::make_tuple(cashflow.end(), exercise_value.end(), ex_idx.end(), stop.end())),
                 thrust::make_zip_iterator(thrust::make_tuple(cashflow.begin(), stop.begin())),
-                [i] __device__(thrust::tuple<double, double, bool, int> t) {
-                double cashflow = thrust::get<0>(t);
-                double exercise_value = thrust::get<1>(t);
-                bool ex_idx = thrust::get<2>(t);
-                int stop = thrust::get<3>(t);
-                if (ex_idx) {
-                    return thrust::make_tuple(exercise_value, i);
-                }
-                return thrust::make_tuple(cashflow, stop);
-            }
-            );
+                [i] __device__(thrust::tuple<double, double, bool, int> t)
+                {
+                    double cashflow = thrust::get<0>(t);
+                    double exercise_value = thrust::get<1>(t);
+                    bool ex_idx = thrust::get<2>(t);
+                    int stop = thrust::get<3>(t);
+                    if (ex_idx)
+                    {
+                        return thrust::make_tuple(exercise_value, i);
+                    }
+                    return thrust::make_tuple(cashflow, stop);
+                });
         }
     }
     // discount final time step
@@ -169,60 +179,104 @@ double ls_american_put_option_backward_pass(thrust::device_vector<thrust::device
     return thrust::reduce(cashflow.begin(), cashflow.end()) / paths;
 }
 
-__global__ void generate_path_kernel(double* paths, int n_paths, int n_time_steps,
-    double initial_price, double delta_t,
-    double drift, double volatility) {
-    int idx = blockIdx.x * blockDim.x + threadIdx.x;
-    if (idx >= n_paths) return;
+// __global__ void generate_path_kernel(double* paths, int n_paths, int n_time_steps,
+//     double initial_price, double delta_t,
+//     double drift, double volatility) {
+//     int idx = blockIdx.x * blockDim.x + threadIdx.x;
+//     if (idx >= n_paths) return;
 
-    curandState state;
-    int seed = 0;
-    curand_init(seed, idx, 0, &state);
+//     curandState state;
+//     int seed = 0;
+//     curand_init(seed, idx, 0, &state);
 
-    int offset = idx;
-    paths[offset] = initial_price;
-    for (int t = 1; t < n_time_steps; ++t) {
-        offset += n_paths;
-        double z = curand_normal_double(&state);
-        double increment = sqrt(delta_t) * z;
-        paths[offset] = paths[offset - n_paths] + drift * delta_t + volatility * increment;
-    }
-}
+//     int offset = idx;
+//     paths[offset] = initial_price;
+//     for (int t = 1; t < n_time_steps; ++t) {
+//         offset += n_paths;
+//         double z = curand_normal_double(&state);
+//         double increment = sqrt(delta_t) * z;
+//         paths[offset] = paths[offset - n_paths] + drift * delta_t + volatility * increment;
+//     }
+// }
+
+// thrust::device_vector<double>
+// generate_random_paths(int n_paths, int n_time_steps, double initial_price,
+//     double delta_t, double drift, double volatility) {
+
+//     thrust::device_vector<double> d_paths(n_paths * n_time_steps);
+
+//     // Kernel configuration
+//     int threadsPerBlock = 256;
+//     int blocksPerGrid = (n_paths + threadsPerBlock - 1) / threadsPerBlock;
+
+//     // Launch the kernel
+//     generate_path_kernel << <blocksPerGrid, threadsPerBlock >> > (thrust::raw_pointer_cast(d_paths.data()),
+//         n_paths, n_time_steps, initial_price,
+//         delta_t, drift, volatility);
+
+//     // Wait for GPU to finish before accessing on host
+//     cudaDeviceSynchronize();
+
+//     return d_paths;
+// }
 
 thrust::device_vector<double>
 generate_random_paths(int n_paths, int n_time_steps, double initial_price,
-    double delta_t, double drift, double volatility) {
+                      double delta_t, double drift, double volatility, int seed)
+{
+    std::vector<double> matrix(n_time_steps * n_paths, initial_price);
+    std::vector<std::mt19937> generators;
+    std::vector<std::normal_distribution<double>> distributions;
 
-    thrust::device_vector<double> d_paths(n_paths * n_time_steps);
+    generators.resize(n_paths);
+    distributions.resize(n_paths);
 
-    // Kernel configuration
-    int threadsPerBlock = 256;
-    int blocksPerGrid = (n_paths + threadsPerBlock - 1) / threadsPerBlock;
+    std::mt19937 seed_gen(seed);
+    std::uniform_int_distribution<int> seed_distribution(std::numeric_limits<int>::min(), std::numeric_limits<int>::max());
 
-    // Launch the kernel
-    generate_path_kernel << <blocksPerGrid, threadsPerBlock >> > (thrust::raw_pointer_cast(d_paths.data()),
-        n_paths, n_time_steps, initial_price,
-        delta_t, drift, volatility);
+    // serial seeding of generators
+    for (int p = 0; p < n_paths; p++)
+    {
+        int path_seed = seed_distribution(seed_gen);
+        std::mt19937 tmp(path_seed);
+        generators[p] = tmp;
+        // std::cout << "path " << p << " seeded with " << path_seed << std::endl;
+    }
+#pragma omp parallel for
+    for (int p = 0; p < n_paths; p++)
+    {
+        distributions[p] = std::normal_distribution<double>(0.0, 1.0);
+    }
 
-    // Wait for GPU to finish before accessing on host
-    cudaDeviceSynchronize();
+    for (int t = 1; t < n_time_steps; ++t)
+    {
+#pragma omp parallel for
+        for (int p = 0; p < n_paths; p++)
+        {
+            const double sample = distributions[p](generators[p]);
+            const double increment = std::sqrt(delta_t) * sample;
+            matrix[t * n_paths + p] =
+                matrix[(t - 1) * n_paths + p] + drift * delta_t + volatility * increment;
+        }
+    }
 
-    return d_paths;
+    thrust::device_vector<double> d_matrix(matrix.begin(), matrix.end());
+    return d_matrix;
 }
 
 void test(int paths, int steps, double s0, double dt, double strike, double r,
-    double drift, double vol, const std::string& save_path)
+          double drift, double vol, const std::string &save_path, int seed)
 {
     std::vector<int> stop;
     auto start_time = std::chrono::high_resolution_clock::now();
-    auto X = generate_random_paths(paths, steps, s0, dt, drift, vol);
+    auto X = generate_random_paths(paths, steps, s0, dt, drift, vol, seed);
     // // Benchmark the function
     // double price = ls_american_put_option_backward_pass(X, stop, dt, r, strike);
     auto end_time = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double> duration = end_time - start_time;
     // std::cout << "Price: " << price << std::endl;
     std::cout << "Execution time: " << duration.count() << " seconds"
-        << std::endl;
+              << std::endl;
 
     // if (save_path != "")
     // {
@@ -245,7 +299,7 @@ void test(int paths, int steps, double s0, double dt, double strike, double r,
     // }
 }
 
-int main(int argc, char* argv[])
+int main(int argc, char *argv[])
 {
     // Default values for the parameters
     int paths = 10000;
@@ -256,6 +310,7 @@ int main(int argc, char* argv[])
     double r = 0.05;
     double drift = 0.05;
     double vol = 0.2;
+    int seed = std::random_device{}();
     std::string save_path = "";
 
     // Parse command line arguments
@@ -280,17 +335,19 @@ int main(int argc, char* argv[])
             vol = std::atof(argv[++i]);
         else if (arg == "-save" && i + 1 < argc)
             save_path = argv[++i];
+        else if (arg == "-seed" && i + 1 < argc)
+            seed = std::atoi(argv[++i]);
         else
         {
             std::cerr << "Usage: " << argv[0]
-                << " [-paths num] [-steps num] [-s0 value] [-dt value] "
-                "[-strike value] [-r rate] [-drift rate] [-vol volatility]"
-                << std::endl;
+                      << " [-paths num] [-steps num] [-s0 value] [-dt value] "
+                         "[-strike value] [-r rate] [-drift rate] [-vol volatility]"
+                      << std::endl;
             return 1;
         }
     }
 
-    test(paths, steps, s0, dt, strike, r, drift, vol, save_path);
+    test(paths, steps, s0, dt, strike, r, drift, vol, save_path, seed);
 
     return 0;
 }
