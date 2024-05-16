@@ -10,10 +10,12 @@
 
 void quadratic_regression(double &a, double &b, double &c,
                           const std::vector<double> &x,
-                          const std::vector<double> &y) {
+                          const std::vector<double> &y)
+{
   int n = x.size();
   std::vector<double> A(n * 3);
-  for (int i = 0; i < n; ++i) {
+  for (int i = 0; i < n; ++i)
+  {
     A[i] = 1.0;
     A[i + n] = x[i];
     A[i + 2 * n] = x[i] * x[i];
@@ -46,7 +48,8 @@ void quadratic_regression(double &a, double &b, double &c,
   // Compute the solution
   dgelsd_(&n, &m, &nrhs, A.data(), &lda, Y.data(), &ldb, S.data(), &minus_one,
           &rank, work.data(), &lwork, iwork.data(), &info);
-  if (info != 0) {
+  if (info != 0)
+  {
     std::cerr << "The algorithm computing SVD failed to converge, info: "
               << info << std::endl;
     return;
@@ -58,40 +61,47 @@ void quadratic_regression(double &a, double &b, double &c,
   a = Y[2];
 }
 
-double eval_quadratic(double a, double b, double c, double x) {
+double eval_quadratic(double a, double b, double c, double x)
+{
   // return a * x * x + b * x + c;
   return c + x * (b + a * x);
 }
 
 double ls_american_put_option_backward_pass(std::vector<std::vector<double>> &X, std::vector<int> &stop,
                                             double dt, double r,
-                                            double strike) {
+                                            double strike)
+{
   int length = X.size();
   int paths = X[0].size();
   stop = std::vector<int>(paths, length - 1);
   double discount = exp(-r * dt);
 
   std::vector<double> cashflow = std::move(X[length - 1]);
-  for (int i = 0; i < paths; i++) {
+  for (int i = 0; i < paths; i++)
+  {
     cashflow[i] = std::max(strike - cashflow[i], 0.0);
   }
 
-  for (int i = length - 2; i > 0; i--) {
+  for (int i = length - 2; i > 0; i--)
+  {
     // compute discount factor
     // discount cashflow for this timestep
     cblas_dscal(paths, discount, cashflow.data(), 1);
     std::vector<double> x = std::move(X[i]);
     // exercise values for this timestep
     std::vector<double> exercise_value(paths);
-    for (int j = 0; j < paths; j++) {
+    for (int j = 0; j < paths; j++)
+    {
       exercise_value[j] = std::max(strike - x[j], 0.0);
     }
 
     std::vector<bool> itm(paths);
     int count = 0;
-    for (int j = 0; j < paths; j++) {
+    for (int j = 0; j < paths; j++)
+    {
       itm[j] = exercise_value[j] > 0;
-      if (itm[j]) {
+      if (itm[j])
+      {
         count++;
       }
     }
@@ -100,8 +110,10 @@ double ls_american_put_option_backward_pass(std::vector<std::vector<double>> &X,
     std::vector<double> x_itm(count);
     std::vector<double> cashflow_itm(count);
     int k = 0;
-    for (int j = 0; j < paths; j++) {
-      if (itm[j]) {
+    for (int j = 0; j < paths; j++)
+    {
+      if (itm[j])
+      {
         x_itm[k] = x[j];
         cashflow_itm[k] = cashflow[j];
         k += 1;
@@ -110,24 +122,30 @@ double ls_american_put_option_backward_pass(std::vector<std::vector<double>> &X,
     std::vector<double> continuation(paths);
     std::vector<bool> ex_idx(paths);
     // if there are ITM paths
-    if (k != 0) {
+    if (k != 0)
+    {
       double a, b, c;
       quadratic_regression(a, b, c, x_itm, cashflow_itm);
 
-      for (int j = 0; j < paths; j++) {
+      for (int j = 0; j < paths; j++)
+      {
         continuation[j] = eval_quadratic(c, b, a, x[j]);
       }
-      for (int j = 0; j < paths; j++) {
+      for (int j = 0; j < paths; j++)
+      {
         ex_idx[j] = itm[j] && (exercise_value[j] > continuation[j]);
       }
     }
     // there are no ITM paths, so we don't exercise
-    else {
+    else
+    {
       std::fill(ex_idx.begin(), ex_idx.end(), false);
     }
 
-    for (int j = 0; j < paths; j++) {
-      if (ex_idx[j]) {
+    for (int j = 0; j < paths; j++)
+    {
+      if (ex_idx[j])
+      {
         cashflow[j] = exercise_value[j];
         stop[j] = i;
       }
@@ -138,7 +156,8 @@ double ls_american_put_option_backward_pass(std::vector<std::vector<double>> &X,
   cblas_dscal(paths, discount, cashflow.data(), 1);
   // return mean of cashflows at t0
   double sum = 0.0;
-  for (int i = 0; i < paths; i++) {
+  for (int i = 0; i < paths; i++)
+  {
     sum += cashflow[i];
   }
   return sum / paths;
@@ -146,15 +165,23 @@ double ls_american_put_option_backward_pass(std::vector<std::vector<double>> &X,
 
 std::vector<std::vector<double>>
 generate_random_paths(int n_paths, int n_time_steps, double initial_price,
-                      double delta_t, double drift, double volatility) {
+                      double delta_t, double drift, double volatility, int seed)
+{
   std::vector<std::vector<double>> matrix(
       n_time_steps, std::vector<double>(n_paths, initial_price));
 
-  std::mt19937 gen(std::random_device{}());
-  std::normal_distribution<double> distribution(0.0, 1.0);
+  std::mt19937 seed_gen(seed);
+  std::uniform_int_distribution<int> seed_distribution(std::numeric_limits<int>::min(), std::numeric_limits<int>::max());
 
-  for (int t = 1; t < n_time_steps; ++t) {
-    for (int p = 0; p < n_paths; p++) {
+  for (int p = 0; p < n_paths; p++)
+  {
+    int path_seed = seed_distribution(seed_gen);
+    std::mt19937 gen(path_seed);
+    std::normal_distribution<double> distribution(0.0, 1.0);
+
+    // std::cout << "path " << p << " seeded with " << path_seed << std::endl;
+    for (int t = 1; t < n_time_steps; ++t)
+    {
       const double sample = distribution(gen);
       const double increment = std::sqrt(delta_t) * sample;
       matrix[t][p] =
