@@ -9,11 +9,15 @@
 double ls_american_put_option_backward_pass(std::vector<std::vector<double>> &X, std::vector<int> &stop,
                                             double dt, double r, double strike);
 // void simulate()
-template <typename T> void printVector(const std::vector<T> &vec) {
+template <typename T>
+void printVector(const std::vector<T> &vec)
+{
   std::cout << "[";
-  for (size_t i = 0; i < vec.size(); i++) {
+  for (size_t i = 0; i < vec.size(); i++)
+  {
     std::cout << vec[i];
-    if (i < vec.size() - 1) {
+    if (i < vec.size() - 1)
+    {
       std::cout << ", ";
     }
   }
@@ -22,5 +26,5 @@ template <typename T> void printVector(const std::vector<T> &vec) {
 
 std::vector<std::vector<double>>
 generate_random_paths(int n_paths, int n_time_steps, double initial_price,
-                      double delta_t, double drift, double volatility);
+                      double delta_t, double drift, double volatility, int seed);
 #endif

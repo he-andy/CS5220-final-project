@@ -3,6 +3,7 @@
 #include <iostream>
 #include <vector>
 #include <fstream>
+#include <random>
 
 void simple_test()
 {
@@ -27,11 +28,11 @@ void simple_test()
 }
 
 void test(int paths, int steps, double s0, double dt, double strike, double r,
-          double drift, double vol, const std::string &save_path)
+          double drift, double vol, const std::string &save_path, int seed)
 {
   std::vector<int> stop;
   auto start_time = std::chrono::high_resolution_clock::now();
-  auto X = generate_random_paths(paths, steps, s0, dt, drift, vol);
+  auto X = generate_random_paths(paths, steps, s0, dt, drift, vol, seed);
   // Benchmark the function
   auto end_time = std::chrono::high_resolution_clock::now();
   std::chrono::duration<double> duration = end_time - start_time;
@@ -75,6 +76,7 @@ int main(int argc, char *argv[])
   double r = 0.05;
   double drift = 0.05;
   double vol = 0.2;
+  int seed = std::random_device{}();
   std::string save_path = "";
 
   // Parse command line arguments
@@ -99,6 +101,8 @@ int main(int argc, char *argv[])
       vol = std::atof(argv[++i]);
     else if (arg == "-save" && i + 1 < argc)
       save_path = argv[++i];
+    else if (arg == "-seed" && i + 1 < argc)
+      seed = std::atoi(argv[++i]);
     else
     {
       std::cerr << "Usage: " << argv[0]
@@ -109,7 +113,7 @@ int main(int argc, char *argv[])
     }
   }
 
-  test(paths, steps, s0, dt, strike, r, drift, vol, save_path);
+  test(paths, steps, s0, dt, strike, r, drift, vol, save_path, seed);
 
   return 0;
 }

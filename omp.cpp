@@ -16,7 +16,7 @@ void quadratic_regression(double &a, double &b, double &c,
 {
   int n = x.size();
   std::vector<double> A(n * 3);
-  #pragma omp parallel for
+#pragma omp parallel for
   for (int i = 0; i < n; ++i)
   {
     A[i] = 1.0;
@@ -80,7 +80,7 @@ double ls_american_put_option_backward_pass(std::vector<std::vector<double>> &X,
   double discount = exp(-r * dt);
 
   std::vector<double> cashflow = std::move(X[length - 1]);
-  #pragma omp parallel for
+#pragma omp parallel for
   for (int i = 0; i < paths; i++)
   {
     cashflow[i] = std::max(strike - cashflow[i], 0.0);
@@ -94,7 +94,7 @@ double ls_american_put_option_backward_pass(std::vector<std::vector<double>> &X,
     std::vector<double> x = std::move(X[i]);
     // exercise values for this timestep
     std::vector<double> exercise_value(paths);
-    #pragma omp parallel for
+#pragma omp parallel for
     for (int j = 0; j < paths; j++)
     {
       exercise_value[j] = std::max(strike - x[j], 0.0);
@@ -102,13 +102,13 @@ double ls_american_put_option_backward_pass(std::vector<std::vector<double>> &X,
 
     std::vector<bool> itm(paths);
     int count = 0;
-    #pragma omp parallel for
+#pragma omp parallel for
     for (int j = 0; j < paths; j++)
     {
       itm[j] = exercise_value[j] > 0;
       if (itm[j])
       {
-        #pragma omp atomic update
+#pragma omp atomic update
         count++;
       }
     }
@@ -117,14 +117,14 @@ double ls_american_put_option_backward_pass(std::vector<std::vector<double>> &X,
     std::vector<double> x_itm(count);
     std::vector<double> cashflow_itm(count);
     int k = 0;
-    #pragma omp parallel for
+#pragma omp parallel for
     for (int j = 0; j < paths; j++)
     {
       if (itm[j])
       {
         x_itm[k] = x[j];
         cashflow_itm[k] = cashflow[j];
-        #pragma omp atomic update
+#pragma omp atomic update
         k += 1;
       }
     }
@@ -136,12 +136,12 @@ double ls_american_put_option_backward_pass(std::vector<std::vector<double>> &X,
       double a, b, c;
       quadratic_regression(a, b, c, x_itm, cashflow_itm);
 
-      #pragma omp parallel for
+#pragma omp parallel for
       for (int j = 0; j < paths; j++)
       {
         continuation[j] = eval_quadratic(c, b, a, x[j]);
       }
-      #pragma omp parallel for
+#pragma omp parallel for
       for (int j = 0; j < paths; j++)
       {
         ex_idx[j] = itm[j] && (exercise_value[j] > continuation[j]);
@@ -153,7 +153,7 @@ double ls_american_put_option_backward_pass(std::vector<std::vector<double>> &X,
       std::fill(ex_idx.begin(), ex_idx.end(), false);
     }
 
-    #pragma omp parallel for
+#pragma omp parallel for
     for (int j = 0; j < paths; j++)
     {
       if (ex_idx[j])
@@ -168,7 +168,7 @@ double ls_american_put_option_backward_pass(std::vector<std::vector<double>> &X,
   cblas_dscal(paths, discount, cashflow.data(), 1);
   // return mean of cashflows at t0
   double sum = 0.0;
-  #pragma omp parallel for reduction(+:sum)
+#pragma omp parallel for reduction(+ : sum)
   for (int i = 0; i < paths; i++)
   {
     sum += cashflow[i];
@@ -178,7 +178,7 @@ double ls_american_put_option_backward_pass(std::vector<std::vector<double>> &X,
 
 std::vector<std::vector<double>>
 generate_random_paths(int n_paths, int n_time_steps, double initial_price,
-                      double delta_t, double drift, double volatility)
+                      double delta_t, double drift, double volatility, int seed)
 {
   std::vector<std::vector<double>> matrix(
       n_time_steps, std::vector<double>(n_paths, initial_price));
@@ -187,10 +187,21 @@ generate_random_paths(int n_paths, int n_time_steps, double initial_price,
 
   generators.resize(n_paths);
   distributions.resize(n_paths);
+
+  std::mt19937 seed_gen(seed);
+  std::uniform_int_distribution<int> seed_distribution(std::numeric_limits<int>::min(), std::numeric_limits<int>::max());
+
+  // serial seeding of generators
+  for (int p = 0; p < n_paths; p++)
+  {
+    int path_seed = seed_distribution(seed_gen);
+    std::mt19937 tmp(path_seed);
+    generators[p] = tmp;
+    // std::cout << "path " << p << " seeded with " << path_seed << std::endl;
+  }
 #pragma omp parallel for
   for (int p = 0; p < n_paths; p++)
   {
-    generators[p] = std::mt19937{std::random_device{}()};
     distributions[p] = std::normal_distribution<double>(0.0, 1.0);
   }
 
