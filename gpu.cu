@@ -2,6 +2,8 @@
 #include <thrust/host_vector.h>
 #include <thrust/transform.h>
 #include <thrust/functional.h>
+#include <thrust/count.h>
+#include <thrust/copy.h>
 #include <thrust/iterator/zip_iterator.h>
 #include <cuda_runtime.h>
 #include <cusolverDn.h>
@@ -61,13 +63,13 @@ void quadratic_regression(double &a, double &b, double &c, thrust::device_vector
     double *d_x = thrust::raw_pointer_cast(sol.data());
 
     cusolverDnHandle_t cusolverH;
-    cusolver_status = cusolverDnCreate(&cusolverH);
+    cusolverDnCreate(&cusolverH);
 
     // Query working space of geqrf and ormqr
     void *d_work;
     size_t work_size;
 
-    cusolverDnDXgels_bufferSize(cusolverH, n, 3, 1, d_A, n, d_y, n, d_x, 3, dwork, &work_size);
+    cusolverDnDXgels_bufferSize(cusolverH, n, 3, 1, d_A, n, d_y, n, d_x, 3, d_work, &work_size);
 
     // Allocate working space
     cudaMalloc(&d_work, work_size);
@@ -81,7 +83,7 @@ void quadratic_regression(double &a, double &b, double &c, thrust::device_vector
     cusolverDnDXgels(cusolverH, n, 3, 1, d_A, n, d_y, n, d_x, 3, d_work, work_size, niter, devInfo);
 
     int h_info = 0;
-    cudaMemcpy(&h_info, dev_info, sizeof(int), cudaMemcpyDeviceToHost);
+    cudaMemcpy(&h_info, devInfo, sizeof(int), cudaMemcpyDeviceToHost);
     if (h_info != 0)
     {
         std::cerr << "QR decomposition failed!" << std::endl;
@@ -93,15 +95,17 @@ void quadratic_regression(double &a, double &b, double &c, thrust::device_vector
     b = h_y[1];
     c = h_y[2];
 
-    cudaFree(dev_info);
-    cudaFree(work);
+    cudaFree(devInfo);
+    cudaFree(d_work);
     cusolverDnDestroy(cusolverH);
 }
 
 double ls_american_put_option_backward_pass(thrust::device_vector<thrust::device_vector<double>> &X, thrust::device_vector<int> &stop, double dt, double r, double strike)
 {
     int length = X.size();
-    int paths = X[0].size();
+    thrust::host_vector<double> X0_host = X[0];
+    int paths = X0_host.size();
+
     stop = thrust::device_vector<int>(paths, length - 1);
     double discount = exp(-r * dt);
 

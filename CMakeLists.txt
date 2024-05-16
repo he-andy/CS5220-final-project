@@ -30,7 +30,7 @@ endif ()
 
 add_executable(gpu gpu.cu)
 target_compile_features(gpu PRIVATE cxx_std_11)
-set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -arch=sm_60")
+set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -arch=sm_60 --extended-lambda")
 target_compile_options(gpu PRIVATE -Wall)
 
 configure_file(job-gpu job-gpu COPYONLY)
