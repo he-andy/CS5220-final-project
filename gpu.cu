@@ -69,7 +69,7 @@ void quadratic_regression(double &a, double &b, double &c, thrust::device_vector
     void *d_work = NULL;
     size_t work_size = 0;
 
-    cusolverDnDDgels_bufferSize(cusolverH, n, 3, 1, d_A, n, d_y, n, d_x, 3, d_work, &work_size);
+    cusolverDnDXgels_bufferSize(cusolverH, n, 3, 1, d_A, n, d_y, n, d_x, 3, d_work, &work_size);
     // Allocate working space
     cudaMalloc(&d_work, work_size);
 
@@ -79,15 +79,15 @@ void quadratic_regression(double &a, double &b, double &c, thrust::device_vector
     // cudaMalloc(&niter, sizeof(int));
 
     // Solve the least squares problem
-    cusolverDnDDgels(cusolverH, n, 3, 1, d_A, n, d_y, n, d_x, 3, d_work, work_size, &niter, devInfo);
+    cusolverDnDXgels(cusolverH, n, 3, 1, d_A, n, d_y, n, d_x, 3, d_work, work_size, &niter, devInfo);
 
     int h_info = 0;
-    cudaMemcpy(&h_info, devInfo, sizeof(int), cudaMemcpyDeviceToHost);
-    if (h_info != 0)
-    {
-        std::cerr << "QR decomposition failed!" << std::endl;
-        return;
-    }
+    // cudaMemcpy(&h_info, devInfo, sizeof(int), cudaMemcpyDeviceToHost);
+    // if (h_info != 0)
+    // {
+    //     std::cerr << "QR decomposition failed!" << std::endl;
+    //     return;
+    // }
 
     thrust::host_vector<double> h_y(sol.begin(), sol.end());
     a = h_y[0];
@@ -274,22 +274,16 @@ void test(int paths, int steps, double s0, double dt, double strike, double r,
     thrust::device_vector<int> stop(paths, 0);
     auto start_time = std::chrono::high_resolution_clock::now();
     auto X = generate_random_paths(paths, steps, s0, dt, drift, vol, seed);
-    std::cout << "Generated paths" << std::endl;
     auto end_time = std::chrono::high_resolution_clock::now();
-    std::chrono::duration<double> duration = end_time - start_time;
-    // std::cout << "Price: " << price << std::endl;
-    std::cout << "Execution time paths: " << duration.count() << " seconds"
-              << std::endl;
-
     auto start_time2 = std::chrono::high_resolution_clock::now();
     // // Benchmark the function
     double price = ls_american_put_option_backward_pass(X, stop, steps, paths, dt, r, strike);
     end_time = std::chrono::high_resolution_clock::now();
     duration = end_time - start_time2;
-    // std::cout << "Price: " << price << std::endl;
+
     std::cout << "Execution time: " << duration.count() << " seconds"
               << std::endl;
-
+    std::cout << "Price: " << price << std::endl;
     // if (save_path != "")
     // {
     //   std::vector<double> to_save(paths * steps / save_freq);
