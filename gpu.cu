@@ -66,21 +66,20 @@ void quadratic_regression(double &a, double &b, double &c, thrust::device_vector
     cusolverDnCreate(&cusolverH);
 
     // Query working space of geqrf and ormqr
-    void *d_work;
-    size_t work_size;
+    void *d_work = NULL;
+    size_t work_size = 0;
 
-    cusolverDnDXgels_bufferSize(cusolverH, n, 3, 1, d_A, n, d_y, n, d_x, 3, d_work, &work_size);
-
+    cusolverDnDDgels_bufferSize(cusolverH, n, 3, 1, d_A, n, d_y, n, d_x, 3, d_work, &work_size);
     // Allocate working space
     cudaMalloc(&d_work, work_size);
 
     int *devInfo;
     cudaMalloc(&devInfo, sizeof(int));
-    int *niter;
-    cudaMalloc(&niter, sizeof(int));
+    int niter;
+    //cudaMalloc(&niter, sizeof(int));
 
     // Solve the least squares problem
-    cusolverDnDXgels(cusolverH, n, 3, 1, d_A, n, d_y, n, d_x, 3, d_work, work_size, niter, devInfo);
+    cusolverDnDDgels(cusolverH, n, 3, 1, d_A, n, d_y, n, d_x, 3, d_work, work_size, &niter, devInfo);
 
     int h_info = 0;
     cudaMemcpy(&h_info, devInfo, sizeof(int), cudaMemcpyDeviceToHost);
@@ -100,24 +99,20 @@ void quadratic_regression(double &a, double &b, double &c, thrust::device_vector
     cusolverDnDestroy(cusolverH);
 }
 
-double ls_american_put_option_backward_pass(thrust::device_vector<thrust::device_vector<double>> &X, thrust::device_vector<int> &stop, double dt, double r, double strike)
+double ls_american_put_option_backward_pass(thrust::device_vector<double> &X, thrust::device_vector<int> &stop, int length, int paths, double dt, double r, double strike)
 {
-    int length = X.size();
-    thrust::host_vector<double> X0_host = X[0];
-    int paths = X0_host.size();
-
-    stop = thrust::device_vector<int>(paths, length - 1);
     double discount = exp(-r * dt);
 
-    thrust::device_vector<double> cashflow = X[length - 1];
-    thrust::transform(cashflow.begin(), cashflow.end(), cashflow.begin(), exercise_value_functor(strike));
+    thrust::device_vector<double> cashflow(paths);
+    thrust::transform(X.begin() + (length - 1) * paths, X.begin() + length * paths, cashflow.begin(), exercise_value_functor(strike));
 
     for (int i = length - 2; i > 0; i--)
     {
         // Discount the cashflows using thrust::transform
         thrust::transform(cashflow.begin(), cashflow.end(), cashflow.begin(), discount_functor(discount));
 
-        thrust::device_vector<double> x = X[i];
+        thrust::device_vector<double> x(paths);
+        thrust::copy(X.begin() + i * paths, X.begin() + (i + 1) * paths, x.begin());
         thrust::device_vector<double> exercise_value(paths);
         thrust::transform(x.begin(), x.end(), exercise_value.begin(), exercise_value_functor(strike));
 
@@ -271,13 +266,21 @@ generate_random_paths(int n_paths, int n_time_steps, double initial_price,
 void test(int paths, int steps, double s0, double dt, double strike, double r,
           double drift, double vol, const std::string &save_path, int seed)
 {
-    std::vector<int> stop;
+    thrust::device_vector<int> stop(paths, 0);
     auto start_time = std::chrono::high_resolution_clock::now();
     auto X = generate_random_paths(paths, steps, s0, dt, drift, vol, seed);
-    // // Benchmark the function
-    // double price = ls_american_put_option_backward_pass(X, stop, dt, r, strike);
+    std::cout << "Generated paths" << std::endl;
     auto end_time = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double> duration = end_time - start_time;
+    // std::cout << "Price: " << price << std::endl;
+    std::cout << "Execution time paths: " << duration.count() << " seconds"
+              << std::endl;
+
+    auto start_time2 = std::chrono::high_resolution_clock::now();
+    // // Benchmark the function
+    double price = ls_american_put_option_backward_pass(X, stop, steps, paths, dt, r, strike);
+    end_time = std::chrono::high_resolution_clock::now();
+    duration = end_time - start_time2;
     // std::cout << "Price: " << price << std::endl;
     std::cout << "Execution time: " << duration.count() << " seconds"
               << std::endl;

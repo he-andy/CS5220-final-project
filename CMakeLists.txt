@@ -6,7 +6,6 @@ set(CMAKE_CXX_STANDARD_REQUIRED YES)
 
 find_package(BLAS REQUIRED)
 find_package(OpenMP REQUIRED)
-
 # netID
 set(NET_ID xxx CACHE STRING "Your netID")
 
@@ -19,6 +18,17 @@ if (NOT ${NET_ID} STREQUAL xxx)
     include(CPack)
 endif ()
 
+
+
+set(Prg-Clang "PrgEnv-nvidia")
+
+add_executable(gpu gpu.cu)
+target_compile_features(gpu PRIVATE cxx_std_11)
+set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS}  -arch=sm_60 --extended-lambda")
+find_package(CUDA REQUIRED)
+link_directories()
+target_link_options(gpu PRIVATE -L/opt/nvidia/hpc_sdk/Linux_x86_64/23.9/math_libs/12.2/lib64 -lcusolver)
+
 # We require the GNU compiler for this assignment.
 if (NOT "${CMAKE_C_COMPILER_ID}" STREQUAL "GNU")
     set(Prg-Intel "PrgEnv-intel")
@@ -28,9 +38,7 @@ if (NOT "${CMAKE_C_COMPILER_ID}" STREQUAL "GNU")
             "module swap ${Prg-${CMAKE_C_COMPILER_ID}} PrgEnv-gnu")
 endif ()
 
-add_executable(gpu gpu.cu)
-target_compile_features(gpu PRIVATE cxx_std_11)
-set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -arch=sm_60 --extended-lambda")
+
 target_compile_options(gpu PRIVATE -Wall)
 
 configure_file(job-gpu job-gpu COPYONLY)
