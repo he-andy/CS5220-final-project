@@ -33,9 +33,12 @@ void test(int paths, int steps, double s0, double dt, double strike, double r,
   auto start_time = std::chrono::high_resolution_clock::now();
   auto X = generate_random_paths(paths, steps, s0, dt, drift, vol);
   // Benchmark the function
-  double price = ls_american_put_option_backward_pass(X, stop, dt, r, strike);
   auto end_time = std::chrono::high_resolution_clock::now();
   std::chrono::duration<double> duration = end_time - start_time;
+  std::cout << "Generate paths time: " << duration.count() << " seconds" << std::endl;
+  double price = ls_american_put_option_backward_pass(X, stop, dt, r, strike);
+  end_time = std::chrono::high_resolution_clock::now();
+  duration = end_time - start_time;
   std::cout << "Price: " << price << std::endl;
   std::cout << "Execution time: " << duration.count() << " seconds"
             << std::endl;

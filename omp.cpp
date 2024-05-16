@@ -80,6 +80,7 @@ double ls_american_put_option_backward_pass(std::vector<std::vector<double>> &X,
   double discount = exp(-r * dt);
 
   std::vector<double> cashflow = std::move(X[length - 1]);
+  #pragma omp parallel for
   for (int i = 0; i < paths; i++)
   {
     cashflow[i] = std::max(strike - cashflow[i], 0.0);
