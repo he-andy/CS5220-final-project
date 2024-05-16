@@ -176,6 +176,7 @@ double ls_american_put_option_backward_pass(std::vector<std::vector<double>> &X,
   return sum / paths;
 }
 
+// THIS VERSION FOR SPEED (NO SEEDING)
 std::vector<std::vector<double>>
 generate_random_paths(int n_paths, int n_time_steps, double initial_price,
                       double delta_t, double drift, double volatility, int seed)
@@ -187,21 +188,10 @@ generate_random_paths(int n_paths, int n_time_steps, double initial_price,
 
   generators.resize(n_paths);
   distributions.resize(n_paths);
-
-  std::mt19937 seed_gen(seed);
-  std::uniform_int_distribution<int> seed_distribution(std::numeric_limits<int>::min(), std::numeric_limits<int>::max());
-
-  // serial seeding of generators
-  for (int p = 0; p < n_paths; p++)
-  {
-    int path_seed = seed_distribution(seed_gen);
-    std::mt19937 tmp(path_seed);
-    generators[p] = tmp;
-    // std::cout << "path " << p << " seeded with " << path_seed << std::endl;
-  }
 #pragma omp parallel for
   for (int p = 0; p < n_paths; p++)
   {
+    generators[p] = std::mt19937{std::random_device{}()};
     distributions[p] = std::normal_distribution<double>(0.0, 1.0);
   }
 
@@ -219,3 +209,48 @@ generate_random_paths(int n_paths, int n_time_steps, double initial_price,
 
   return matrix;
 }
+
+// THIS VERSION FOR CORRECTNESS CHECKS
+// std::vector<std::vector<double>>
+// generate_random_paths(int n_paths, int n_time_steps, double initial_price,
+//                       double delta_t, double drift, double volatility, int seed)
+// {
+//   std::vector<std::vector<double>> matrix(
+//       n_time_steps, std::vector<double>(n_paths, initial_price));
+//   std::vector<std::mt19937> generators;
+//   std::vector<std::normal_distribution<double>> distributions;
+
+//   generators.resize(n_paths);
+//   distributions.resize(n_paths);
+
+//   std::mt19937 seed_gen(seed);
+//   std::uniform_int_distribution<int> seed_distribution(std::numeric_limits<int>::min(), std::numeric_limits<int>::max());
+
+//   // serial seeding of generators
+//   for (int p = 0; p < n_paths; p++)
+//   {
+//     int path_seed = seed_distribution(seed_gen);
+//     std::mt19937 tmp(path_seed);
+//     generators[p] = tmp;
+//     // std::cout << "path " << p << " seeded with " << path_seed << std::endl;
+//   }
+// #pragma omp parallel for
+//   for (int p = 0; p < n_paths; p++)
+//   {
+//     distributions[p] = std::normal_distribution<double>(0.0, 1.0);
+//   }
+
+//   for (int t = 1; t < n_time_steps; ++t)
+//   {
+// #pragma omp parallel for
+//     for (int p = 0; p < n_paths; p++)
+//     {
+//       const double sample = distributions[p](generators[p]);
+//       const double increment = std::sqrt(delta_t) * sample;
+//       matrix[t][p] =
+//           matrix[t - 1][p] + drift * delta_t + volatility * increment;
+//     }
+//   }
+
+//   return matrix;
+// }

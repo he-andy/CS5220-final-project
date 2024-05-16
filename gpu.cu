@@ -200,6 +200,7 @@ __global__ void generate_path_kernel(double *paths, int n_paths, int n_time_step
     }
 }
 
+// THIS VERSION FOR NO SEEDING (FAST)
 thrust::device_vector<double>
 generate_random_paths(int n_paths, int n_time_steps, double initial_price,
                       double delta_t, double drift, double volatility, int seed)
@@ -222,6 +223,7 @@ generate_random_paths(int n_paths, int n_time_steps, double initial_price,
     return d_paths;
 }
 
+// THIS VERSION FOR SEEDING
 // thrust::device_vector<double>
 // generate_random_paths(int n_paths, int n_time_steps, double initial_price,
 //                       double delta_t, double drift, double volatility, int seed)
