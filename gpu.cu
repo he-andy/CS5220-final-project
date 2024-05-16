@@ -76,7 +76,7 @@ void quadratic_regression(double &a, double &b, double &c, thrust::device_vector
     int *devInfo;
     cudaMalloc(&devInfo, sizeof(int));
     int niter;
-    //cudaMalloc(&niter, sizeof(int));
+    // cudaMalloc(&niter, sizeof(int));
 
     // Solve the least squares problem
     cusolverDnDDgels(cusolverH, n, 3, 1, d_A, n, d_y, n, d_x, 3, d_work, work_size, &niter, devInfo);
@@ -178,90 +178,93 @@ double ls_american_put_option_backward_pass(thrust::device_vector<double> &X, th
     return thrust::reduce(cashflow.begin(), cashflow.end()) / paths;
 }
 
-// __global__ void generate_path_kernel(double* paths, int n_paths, int n_time_steps,
-//     double initial_price, double delta_t,
-//     double drift, double volatility) {
-//     int idx = blockIdx.x * blockDim.x + threadIdx.x;
-//     if (idx >= n_paths) return;
+__global__ void generate_path_kernel(double *paths, int n_paths, int n_time_steps,
+                                     double initial_price, double delta_t,
+                                     double drift, double volatility, int seed)
+{
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx >= n_paths)
+        return;
 
-//     curandState state;
-//     int seed = 0;
-//     curand_init(seed, idx, 0, &state);
+    curandState state;
+    curand_init(seed, idx, 0, &state);
 
-//     int offset = idx;
-//     paths[offset] = initial_price;
-//     for (int t = 1; t < n_time_steps; ++t) {
-//         offset += n_paths;
-//         double z = curand_normal_double(&state);
-//         double increment = sqrt(delta_t) * z;
-//         paths[offset] = paths[offset - n_paths] + drift * delta_t + volatility * increment;
-//     }
-// }
-
-// thrust::device_vector<double>
-// generate_random_paths(int n_paths, int n_time_steps, double initial_price,
-//     double delta_t, double drift, double volatility) {
-
-//     thrust::device_vector<double> d_paths(n_paths * n_time_steps);
-
-//     // Kernel configuration
-//     int threadsPerBlock = 256;
-//     int blocksPerGrid = (n_paths + threadsPerBlock - 1) / threadsPerBlock;
-
-//     // Launch the kernel
-//     generate_path_kernel << <blocksPerGrid, threadsPerBlock >> > (thrust::raw_pointer_cast(d_paths.data()),
-//         n_paths, n_time_steps, initial_price,
-//         delta_t, drift, volatility);
-
-//     // Wait for GPU to finish before accessing on host
-//     cudaDeviceSynchronize();
-
-//     return d_paths;
-// }
+    int offset = idx;
+    paths[offset] = initial_price;
+    for (int t = 1; t < n_time_steps; ++t)
+    {
+        offset += n_paths;
+        double z = curand_normal_double(&state);
+        double increment = sqrt(delta_t) * z;
+        paths[offset] = paths[offset - n_paths] + drift * delta_t + volatility * increment;
+    }
+}
 
 thrust::device_vector<double>
 generate_random_paths(int n_paths, int n_time_steps, double initial_price,
                       double delta_t, double drift, double volatility, int seed)
 {
-    std::vector<double> matrix(n_time_steps * n_paths, initial_price);
-    std::vector<std::mt19937> generators;
-    std::vector<std::normal_distribution<double>> distributions;
 
-    generators.resize(n_paths);
-    distributions.resize(n_paths);
+    thrust::device_vector<double> d_paths(n_paths * n_time_steps);
 
-    std::mt19937 seed_gen(seed);
-    std::uniform_int_distribution<int> seed_distribution(std::numeric_limits<int>::min(), std::numeric_limits<int>::max());
+    // Kernel configuration
+    int threadsPerBlock = 256;
+    int blocksPerGrid = (n_paths + threadsPerBlock - 1) / threadsPerBlock;
 
-    // serial seeding of generators
-    for (int p = 0; p < n_paths; p++)
-    {
-        int path_seed = seed_distribution(seed_gen);
-        std::mt19937 tmp(path_seed);
-        generators[p] = tmp;
-        // std::cout << "path " << p << " seeded with " << path_seed << std::endl;
-    }
-#pragma omp parallel for
-    for (int p = 0; p < n_paths; p++)
-    {
-        distributions[p] = std::normal_distribution<double>(0.0, 1.0);
-    }
+    // Launch the kernel
+    generate_path_kernel<<<blocksPerGrid, threadsPerBlock>>>(thrust::raw_pointer_cast(d_paths.data()),
+                                                             n_paths, n_time_steps, initial_price,
+                                                             delta_t, drift, volatility, seed);
 
-    for (int t = 1; t < n_time_steps; ++t)
-    {
-#pragma omp parallel for
-        for (int p = 0; p < n_paths; p++)
-        {
-            const double sample = distributions[p](generators[p]);
-            const double increment = std::sqrt(delta_t) * sample;
-            matrix[t * n_paths + p] =
-                matrix[(t - 1) * n_paths + p] + drift * delta_t + volatility * increment;
-        }
-    }
+    // Wait for GPU to finish before accessing on host
+    cudaDeviceSynchronize();
 
-    thrust::device_vector<double> d_matrix(matrix.begin(), matrix.end());
-    return d_matrix;
+    return d_paths;
 }
+
+// thrust::device_vector<double>
+// generate_random_paths(int n_paths, int n_time_steps, double initial_price,
+//                       double delta_t, double drift, double volatility, int seed)
+// {
+//     std::vector<double> matrix(n_time_steps * n_paths, initial_price);
+//     std::vector<std::mt19937> generators;
+//     std::vector<std::normal_distribution<double>> distributions;
+
+//     generators.resize(n_paths);
+//     distributions.resize(n_paths);
+
+//     std::mt19937 seed_gen(seed);
+//     std::uniform_int_distribution<int> seed_distribution(std::numeric_limits<int>::min(), std::numeric_limits<int>::max());
+
+//     // serial seeding of generators
+//     for (int p = 0; p < n_paths; p++)
+//     {
+//         int path_seed = seed_distribution(seed_gen);
+//         std::mt19937 tmp(path_seed);
+//         generators[p] = tmp;
+//         // std::cout << "path " << p << " seeded with " << path_seed << std::endl;
+//     }
+// #pragma omp parallel for
+//     for (int p = 0; p < n_paths; p++)
+//     {
+//         distributions[p] = std::normal_distribution<double>(0.0, 1.0);
+//     }
+
+//     for (int t = 1; t < n_time_steps; ++t)
+//     {
+// #pragma omp parallel for
+//         for (int p = 0; p < n_paths; p++)
+//         {
+//             const double sample = distributions[p](generators[p]);
+//             const double increment = std::sqrt(delta_t) * sample;
+//             matrix[t * n_paths + p] =
+//                 matrix[(t - 1) * n_paths + p] + drift * delta_t + volatility * increment;
+//         }
+//     }
+
+//     thrust::device_vector<double> d_matrix(matrix.begin(), matrix.end());
+//     return d_matrix;
+// }
 
 void test(int paths, int steps, double s0, double dt, double strike, double r,
           double drift, double vol, const std::string &save_path, int seed)
